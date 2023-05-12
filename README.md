@@ -17,7 +17,7 @@ go build -o bin/ ./cmd/*
 To run the app:
 ```bash
 PWD=$(pwd)
-./bin/logcat -dir $PWD/files/artifactory-requests.log -out $PWD/files
+./bin/logcat -file $PWD/files/artifactory-requests.log -outdir $PWD/files
 ```
 
 Open another terminal and manually add log entries to the artifactory-request.log:
