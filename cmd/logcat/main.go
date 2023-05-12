@@ -23,8 +23,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// parse cli flags
-	flag.StringVar(&file, "file", "/opt/rtfact/apps/artifactory/var/log/artifactory-request.log", "Path to file we are parsing")
-	flag.StringVar(&outdir, "outdir", "/opt/rtfact/logs/billing", "Directory for writing billing logs to")
+	flag.StringVar(&file, "file", "", "Path to file we are parsing")
+	flag.StringVar(&outdir, "outdir", "", "Directory for writing billing logs to")
 	flag.Parse()
 
 	// ensure file and outdir are absolute paths
