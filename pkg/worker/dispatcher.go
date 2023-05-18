@@ -1,84 +1,53 @@
 package worker
 
 import (
-	"context"
-	"fmt"
-	"io"
+	"log"
 	"sync"
 
 	"github.com/hpcloud/tail"
-
-	"github.com/svetlyopet/logcat/pkg/writer"
 )
 
-var (
-	wg sync.WaitGroup
-)
+// Dispatcher describes a dispatcher
+type Dispatcher struct {
+	Tail        *tail.Tail
+	Workers     int
+	WorkQueue   chan WorkRequest
+	OutputQueue chan string
+	WaitGroup   *sync.WaitGroup
+	Logger      *log.Logger
+}
 
-// Dispatcher builds the workers, distributes the work to them and initializes
-// the writer, who listens on a channel where the workers send their finished work
-func Dispatcher(ctx context.Context, file string, outdir string, workers int) error {
-	// create a worker queue which holds all workers who are available to take work
-	WorkerQueue := make(chan chan WorkRequest, workers)
-
-	// create an output queue that workers send output to
-	WriteQueue := make(chan string, 100)
-
-	// initialize the workers
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		worker := NewWorker(i+1, WorkerQueue, WriteQueue, ctx, &wg)
-		worker.Start()
+// NewDispatcher creates and returns a Dispatcher object
+func NewDispatcher(d Dispatcher) *Dispatcher {
+	dispatcher := &Dispatcher{
+		Tail:        d.Tail,
+		Workers:     d.Workers,
+		WorkQueue:   d.WorkQueue,
+		OutputQueue: d.OutputQueue,
+		WaitGroup:   d.WaitGroup,
+		Logger:      d.Logger,
 	}
+	return dispatcher
+}
 
-	// add work to the work queue and the workers to the worker queue
+// Start starts the workers, dispatches the work to them and initializes
+// the writer, who listens on a channel where the workers send their finished work
+func (d *Dispatcher) Start() {
 	go func() {
-		for {
-			select {
-			case work := <-WorkQueue:
-				go func() {
-					worker := <-WorkerQueue
-					worker <- work
-				}()
-			}
+		// start the workers
+		for i := 0; i < d.Workers; i++ {
+			d.WaitGroup.Add(1)
+			worker := NewWorker(i+1, d.WorkQueue, d.OutputQueue, d.WaitGroup, d.Logger)
+			worker.Start()
 		}
 	}()
+}
 
-	// create a new Writer implementation
-	writerImpl := writer.NewWriter(outdir, WriteQueue, ctx)
-	writerImpl.Start()
+// Stop closes the work channels and triggers the workers to stop gracefully
+func (d *Dispatcher) Stop() {
+	// close the work queue
+	close(d.WorkQueue)
 
-	// start tailing the input file
-	t, err := tail.TailFile(file, tail.Config{
-		Follow: true,
-		ReOpen: true,
-		Location: &tail.SeekInfo{
-			Offset: 0,
-			Whence: io.SeekEnd,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to tail log file: %v", err)
-	}
-
-	for {
-		select {
-		// send log lines from the tail channel to the collector
-		case line := <-t.Lines:
-			Collector(line.Text, "|", 11)
-		// listen on the context channel
-		case <-ctx.Done():
-			// stop tailing the input file
-			if err = t.Stop(); err != nil {
-				return fmt.Errorf("failed to close input file %v : %v", t.Filename, err)
-			}
-
-			// wait for all workers to finish
-			wg.Wait()
-
-			// stop the writer
-			writerImpl.Stop()
-			return nil
-		}
-	}
+	// wait for all workers to finish
+	d.WaitGroup.Wait()
 }

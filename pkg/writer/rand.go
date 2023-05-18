@@ -1,11 +1,11 @@
-package utils
+package writer
 
 import (
 	"math/rand"
 	"time"
 )
 
-// GenerateRandomString takes an int and generates a random string with length int
+// GenerateRandomString generates a random alphanumerical string with a requested length
 func GenerateRandomString(length int) string {
 	charset := "abcde1234567890123456789012345678901234567890"
 	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))

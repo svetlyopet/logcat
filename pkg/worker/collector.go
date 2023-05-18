@@ -5,22 +5,22 @@ import (
 	"strings"
 )
 
-var (
-	WorkQueue = make(chan WorkRequest, 100)
-)
-
-// The Collector receives log entries and builds a work request for the workers
-func Collector(line string, delimiter string, num int) {
-	split := strings.Split(line, delimiter)
-	if len(split) != num {
-		log.Printf("missmatch number of fields for line: %v : expected number of fields: %d, found %d\n", line, num, len(split))
+// Collector receives log entries and builds a work request for the workers and sends it in the WorkQueue
+func Collector(line string, format LogFormat, workQueue chan WorkRequest) {
+	// check if the input string should be processed
+	split := strings.Split(line, format.Delimiter)
+	if len(split) != format.NumFields {
+		log.Printf("missmatch number of fields for line: %v : expected number of fields: %d, found %d\n", line, format.NumFields, len(split))
 		return
 	}
 
+	// build the work requests for the workers
 	work := WorkRequest{
-		Line: line,
+		Line:      line,
+		Delimiter: format.Delimiter,
 	}
 
-	WorkQueue <- work
+	// send the work request to the work queue to be picked up by the workers
+	workQueue <- work
 	return
 }

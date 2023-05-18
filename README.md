@@ -7,6 +7,9 @@ to the billing logs setup in Artifactory Cloud.
 
 If the log file we are reading from does not exist, logcat will wait for it to be created.
 
+Implementation is inspired by:
+https://nesv.github.io/golang/2014/02/25/worker-queues-in-go.html
+
 # Getting Started
 Building the binary
 ```bash
@@ -17,7 +20,7 @@ go build -o bin/ ./cmd/*
 To run the app:
 ```bash
 PWD=$(pwd)
-./bin/logcat -file $PWD/files/artifactory-requests.log -outdir $PWD/files
+./bin/logcat -dir $PWD/files/artifactory-requests.log -out $PWD/files
 ```
 
 Open another terminal and manually add log entries to the artifactory-request.log:

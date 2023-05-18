@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"context"
 	"log"
 	"sync"
 
@@ -11,23 +10,21 @@ import (
 // Worker describes a worker
 type Worker struct {
 	ID          int
-	Work        chan WorkRequest
-	WorkerQueue chan chan WorkRequest
+	WorkQueue   chan WorkRequest
 	OutputQueue chan string
-	Context     context.Context
 	WaitGroup   *sync.WaitGroup
+	Logger      *log.Logger
 }
 
 // NewWorker creates and returns a new Worker object.
-func NewWorker(id int, workerQueue chan chan WorkRequest, outputQueue chan string, ctx context.Context, wg *sync.WaitGroup) Worker {
+func NewWorker(id int, workQueue chan WorkRequest, outputQueue chan string, waitGroup *sync.WaitGroup, logger *log.Logger) Worker {
 	// Create and return the worker
 	worker := Worker{
 		ID:          id,
-		Work:        make(chan WorkRequest),
-		WorkerQueue: workerQueue,
+		WorkQueue:   workQueue,
 		OutputQueue: outputQueue,
-		Context:     ctx,
-		WaitGroup:   wg,
+		WaitGroup:   waitGroup,
+		Logger:      logger,
 	}
 
 	return worker
@@ -39,26 +36,25 @@ func (w *Worker) Start() {
 		defer w.WaitGroup.Done()
 
 		for {
-			// worker adds itself to the WorkerQueue
-			w.WorkerQueue <- w.Work
-
-			select {
-			// get work from the Work channel
-			case work := <-w.Work:
-				logEntry, err := parser.Parse(work.Line)
-				if err != nil {
-					log.Printf("error while parsing line: %v : %v\n", work.Line, err)
-					return
-				}
-				if logEntry == "" {
-					return
-				}
-				w.OutputQueue <- logEntry
-			// listen for context cancel func
-			case <-w.Context.Done():
-				log.Printf("workerID %d stopping\n", w.ID)
+			// get work from the Work channel until we receive signal that channel is closed
+			work, ok := <-w.WorkQueue
+			if !ok {
+				w.Logger.Printf("stoping worker %d", w.ID)
 				return
 			}
+
+			// do the work
+			logEntry, err := parser.Parse(work.Line, work.Delimiter)
+			if err != nil {
+				w.Logger.Printf("error while parsing line: \"%v\" : %v\n", work.Line, err)
+				continue
+			}
+			if logEntry == "" {
+				continue
+			}
+
+			// send the finished work to the output channel
+			w.OutputQueue <- logEntry
 		}
 	}()
 }

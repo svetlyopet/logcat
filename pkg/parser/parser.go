@@ -15,10 +15,10 @@ var (
 	rePathGeneric    = regexp.MustCompile(`/[^/]+/([^/].*)`)
 )
 
-// Parse takes a string containing data separated by a delimiter
+// Parse takes a log line containing data separated by a delimiter
 // and returns a string with the parsed and modified data
-func Parse(line string) (string, error) {
-	split := strings.Split(line, "|")
+func Parse(line string, delimiter string) (string, error) {
+	split := strings.Split(line, delimiter)
 
 	r := RequestLogs{
 		timestamp: split[0],

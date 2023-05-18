@@ -1,14 +1,12 @@
 package writer
 
 import (
-	"context"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/robfig/cron/v3"
-
-	"github.com/svetlyopet/logcat/pkg/utils"
 )
 
 // Writer describes a writer
@@ -18,70 +16,71 @@ type Writer struct {
 	Flag        int
 	Permissions os.FileMode
 	WriteQueue  chan string
-	QuitChan    chan bool
-	Context     context.Context
+	DoneChan    chan bool
+	Logger      *log.Logger
 }
 
 // NewWriter creates and returns a new Writer object
-func NewWriter(dir string, writeQueue chan string, ctx context.Context) Writer {
+func NewWriter(w Writer) Writer {
 	writer := Writer{
-		Directory:   dir,
+		Directory:   w.Directory,
 		Flag:        os.O_APPEND | os.O_CREATE | os.O_WRONLY,
 		Permissions: 0644,
-		WriteQueue:  writeQueue,
-		QuitChan:    make(chan bool),
-		Context:     ctx,
+		WriteQueue:  w.WriteQueue,
+		DoneChan:    w.DoneChan,
+		Logger:      w.Logger,
 	}
 
 	return writer
 }
 
 // Start starts a writer
-func (w *Writer) Start() {
+func (w *Writer) Start() error {
+	// create initial output file
+	if err := w.Open(w.Directory); err != nil {
+		return fmt.Errorf("failed to open file: %v", err)
+	}
+
+	// create channel for sending ticks to rotate output file
+	tick := make(chan bool, 1)
+
+	// create cron and set to send ticks every hour
+	c := cron.New()
+	_, err := c.AddFunc("0 * * * *", func() { tick <- true })
+	if err != nil {
+		return fmt.Errorf("failed to start cron timer: %v", err)
+	}
+	c.Start()
+
 	go func() {
-		// create initial output file
-		if err := w.Open(w.Directory); err != nil {
-			log.Fatalf("failed to open file: %v", err)
-		}
-
-		// create channel for sending ticks to rotate output file
-		tick := make(chan bool, 1)
-
-		// create cron and set to send ticks every hour
-		c := cron.New()
-		_, err := c.AddFunc("0 * * * *", func() { tick <- true })
-		if err != nil {
-			log.Fatalf("failed to start cron timer: %v", err)
-		}
-		c.Start()
-
 		for {
 			select {
 			// listen for incoming log entries from the workers
-			case logEntry := <-w.WriteQueue:
-				if err = w.Write(logEntry); err != nil {
-					log.Printf("failed writing to file: %v", err)
+			case logEntry, ok := <-w.WriteQueue:
+				if !ok {
+					if err = w.File.Close(); err != nil {
+						w.Logger.Fatalf("failed to close output file: %v : %v", w.File.Name(), err)
+					}
+					w.Logger.Printf("stopping the writer")
+					w.DoneChan <- true
+					return
 				}
+				if err = w.Write(logEntry); err != nil {
+					w.Logger.Printf("failed writing to file: %v", err)
+				}
+
 			// listen for ticks to rotate output file
 			case <-tick:
 				if err = w.Close(); err != nil {
-					log.Printf("failed to close output file: %v : %v", w.File.Name(), err)
+					w.Logger.Fatalf("failed to close output file: %v : %v", w.File.Name(), err)
 				}
 				if err = w.Open(w.Directory); err != nil {
-					log.Printf("failed to open output file: %v : %v", w.File.Name(), err)
+					w.Logger.Fatalf("failed to open output file: %v : %v", w.File.Name(), err)
 				}
-			// listen for context cancel func
-			case <-w.QuitChan:
-				log.Println("Stopping the writer")
-				// close fd on output file
-				if err = w.Close(); err != nil {
-					log.Printf("failed to close output file: %v : %v", w.File.Name(), err)
-				}
-
-				return
 			}
 		}
 	}()
+	return nil
 }
 
 // Close closes the file descriptor of the current file
@@ -102,13 +101,13 @@ func (w *Writer) Open(dir string) error {
 	t := time.Now()
 	timestamp := t.Format("2006-01-02")
 
-	random := utils.GenerateRandomString(8)
+	random := GenerateRandomString(8)
 
 	filename := "artifactory-traffic-" + timestamp + "-" + random + ".log"
 	// looping 10 times should be sufficient to get a unique string from random func to have as file name
 	for i := 0; i < 10; i++ {
 		if _, err := os.Stat(dir + filename); err != nil {
-			random = utils.GenerateRandomString(8)
+			random = GenerateRandomString(8)
 			filename = "artifactory-traffic-" + timestamp + "-" + random + ".log"
 		} else {
 			break
@@ -144,10 +143,8 @@ func (w *Writer) Write(line string) error {
 	return nil
 }
 
-// Stop signals the writer to stop
+// Stop closes the write queue of the writer which triggers a graceful stop
 func (w *Writer) Stop() {
-	w.QuitChan <- true
-
-	// give some time for the writer to finish writing log entries from the queue
-	time.Sleep(time.Millisecond * 100)
+	// close the work queue
+	close(w.WriteQueue)
 }
