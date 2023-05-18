@@ -20,5 +20,9 @@
 # Go workspace file
 go.work
 
-# Binary build dir
+# IDE and MacOS directories
+.idea
+.DS_Store
+
+# Binary build directory
 bin/
