@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -22,6 +23,11 @@ type Writer struct {
 
 // NewWriter creates and returns a new Writer object
 func NewWriter(w Writer) Writer {
+	// ensure outdir path is correct format
+	if !strings.HasSuffix(w.Directory, "/") {
+		w.Directory += "/"
+	}
+
 	writer := Writer{
 		Directory:   w.Directory,
 		Flag:        os.O_APPEND | os.O_CREATE | os.O_WRONLY,

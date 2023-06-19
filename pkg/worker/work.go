@@ -4,4 +4,5 @@ package worker
 type WorkRequest struct {
 	Line      string
 	Delimiter string
+	NumFields int
 }

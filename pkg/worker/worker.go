@@ -10,6 +10,7 @@ import (
 // Worker describes a worker
 type Worker struct {
 	ID          int
+	ServerName  string
 	WorkQueue   chan WorkRequest
 	OutputQueue chan string
 	WaitGroup   *sync.WaitGroup
@@ -17,10 +18,11 @@ type Worker struct {
 }
 
 // NewWorker creates and returns a new Worker object.
-func NewWorker(id int, workQueue chan WorkRequest, outputQueue chan string, waitGroup *sync.WaitGroup, logger *log.Logger) Worker {
+func NewWorker(id int, serverName string, workQueue chan WorkRequest, outputQueue chan string, waitGroup *sync.WaitGroup, logger *log.Logger) Worker {
 	// Create and return the worker
 	worker := Worker{
 		ID:          id,
+		ServerName:  serverName,
 		WorkQueue:   workQueue,
 		OutputQueue: outputQueue,
 		WaitGroup:   waitGroup,
@@ -44,7 +46,7 @@ func (w *Worker) Start() {
 			}
 
 			// do the work
-			logEntry, err := parser.Parse(work.Line, work.Delimiter)
+			logEntry, err := parser.Parse(work.Line, work.Delimiter, work.NumFields, w.ServerName)
 			if err != nil {
 				w.Logger.Printf("error while parsing line: \"%v\" : %v\n", work.Line, err)
 				continue

@@ -37,7 +37,7 @@ var (
 // PrintHelp prints out to stdout help information about this program and exits
 func PrintHelp() {
 	fmt.Println("Usage: logcat -file [FILEPATH] -outdir [DIRECTORY]")
-	fmt.Println("Example: logcat -dir /opt/artifactory/var/log/artifactory-request.log -out /tmp")
+	fmt.Println("Example: logcat -file /opt/artifactory/var/log/artifactory-requests.log -outdir /tmp")
 	os.Exit(1)
 }
 
@@ -51,11 +51,6 @@ func main() {
 	if !strings.HasPrefix(file, "/") || !strings.HasPrefix(file, "/") {
 		fmt.Println("Path to file and directory must be absolute path")
 		PrintHelp()
-	}
-
-	// ensure outdir path is correct format
-	if !strings.HasSuffix(outdir, "/") {
-		outdir += "/"
 	}
 
 	// create a logger
@@ -77,8 +72,8 @@ func main() {
 		ReOpen: true,
 		Logger: logger,
 		Location: &tail.SeekInfo{
-			Offset: io.SeekStart,
-			Whence: io.SeekCurrent,
+			Offset: io.SeekCurrent,
+			Whence: io.SeekEnd,
 		},
 	})
 	if err != nil {
@@ -94,7 +89,7 @@ func main() {
 
 	// create a config for the work dispatcher
 	dispatcherConfig := worker.Dispatcher{
-		Tail:        t,
+		ServerName:  "artifactory.domain",
 		Workers:     5,
 		WorkQueue:   workQueue,
 		OutputQueue: writeQueue,

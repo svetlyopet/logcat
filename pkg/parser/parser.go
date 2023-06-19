@@ -3,7 +3,6 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,9 +16,14 @@ var (
 
 // Parse takes a log line containing data separated by a delimiter
 // and returns a string with the parsed and modified data
-func Parse(line string, delimiter string) (string, error) {
+func Parse(line string, delimiter string, numFields int, serverName string) (string, error) {
+	// check if the input string should be processed
 	split := strings.Split(line, delimiter)
+	if len(split) != numFields {
+		return "", fmt.Errorf("missmatch number of fields for line: %v : expected number of fields: %d, found %d\n", line, numFields, len(split))
+	}
 
+	// save the request log entry in the RequestLogs struct
 	r := RequestLogs{
 		timestamp: split[0],
 		ip:        split[2],
@@ -31,7 +35,7 @@ func Parse(line string, delimiter string) (string, error) {
 	}
 
 	// add checks if the request contains information suitable for billing log
-	if r.status != "200" || r.method != "GET" || r.size == "0" || r.user == "non_authenticated_user" || r.user == "anonymous" {
+	if r.status != "200" || (r.method != "GET" && r.method != "HEAD") || r.size == "0" || r.user == "non_authenticated_user" || r.user == "anonymous" {
 		return "", nil
 	}
 
@@ -83,14 +87,9 @@ func Parse(line string, delimiter string) (string, error) {
 		return "", fmt.Errorf("cound not parse response size from request log: %v", err)
 	}
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("could not get node hostname: %v", err)
-	}
-
 	billingLog := BillingLogs{
 		Timestamp:       timestamp,
-		ServerName:      hostname,
+		ServerName:      serverName,
 		Service:         "artifactory",
 		Action:          "download",
 		RemoteIP:        r.ip,

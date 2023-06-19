@@ -3,13 +3,11 @@ package worker
 import (
 	"log"
 	"sync"
-
-	"github.com/hpcloud/tail"
 )
 
 // Dispatcher describes a dispatcher
 type Dispatcher struct {
-	Tail        *tail.Tail
+	ServerName  string
 	Workers     int
 	WorkQueue   chan WorkRequest
 	OutputQueue chan string
@@ -20,7 +18,7 @@ type Dispatcher struct {
 // NewDispatcher creates and returns a Dispatcher object
 func NewDispatcher(d Dispatcher) *Dispatcher {
 	dispatcher := &Dispatcher{
-		Tail:        d.Tail,
+		ServerName:  d.ServerName,
 		Workers:     d.Workers,
 		WorkQueue:   d.WorkQueue,
 		OutputQueue: d.OutputQueue,
@@ -37,7 +35,7 @@ func (d *Dispatcher) Start() {
 		// start the workers
 		for i := 0; i < d.Workers; i++ {
 			d.WaitGroup.Add(1)
-			worker := NewWorker(i+1, d.WorkQueue, d.OutputQueue, d.WaitGroup, d.Logger)
+			worker := NewWorker(i+1, d.ServerName, d.WorkQueue, d.OutputQueue, d.WaitGroup, d.Logger)
 			worker.Start()
 		}
 	}()
